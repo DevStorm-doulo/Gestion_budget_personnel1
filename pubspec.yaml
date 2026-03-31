@@ -32,6 +32,32 @@ dependencies:
     sdk: flutter
   google_fonts: ^8.0.2
 
+  # Stockage local
+  shared_preferences: ^2.3.0
+
+  # UI Onboarding
+  smooth_page_indicator: ^1.1.0
+
+  # Authentification biométrique
+  local_auth: ^2.3.0
+
+  # Notifications locales
+  flutter_local_notifications: ^17.0.0
+
+  # Export PDF
+  pdf: ^3.10.0
+  printing: ^5.12.0
+
+  # Export Excel
+  excel: ^4.0.0
+
+  # HTTP pour API taux de change
+  http: ^1.2.0
+
+  # OCR et reconnaissance de reçus
+  google_mlkit_text_recognition: ^0.13.0
+  image_picker: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

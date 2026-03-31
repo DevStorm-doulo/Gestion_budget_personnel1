@@ -21,23 +21,31 @@ class FournisseurTableauBord extends ChangeNotifier {
   bool _enChargement = false;
   bool get enChargement => _enChargement;
 
+  String? _messageErreur;
+  String? get messageErreur => _messageErreur;
+
   Future<void> chargerDonnees() async {
     _enChargement = true;
+    _messageErreur = null;
     notifyListeners();
 
     final resultSolde = await casObtenirSolde(SansParametres());
     resultSolde.fold(
-      (echec) => null,
+      (echec) => _definirErreur(echec.message),
       (solde) => _soldeActuel = solde,
     );
 
     final resultStats = await casObtenirStatistiques(SansParametres());
     resultStats.fold(
-      (echec) => null,
+      (echec) => _definirErreur(echec.message),
       (stats) => _statistiques = stats,
     );
 
     _enChargement = false;
     notifyListeners();
+  }
+
+  void _definirErreur(String message) {
+    _messageErreur = message;
   }
 }

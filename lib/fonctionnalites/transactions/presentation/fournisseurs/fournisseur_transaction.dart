@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/cas_utilisation/cas_utilisation.dart';
 import '../../domaine/cas_utilisation/ajouter_transaction.dart';
 import '../../domaine/cas_utilisation/obtenir_transactions.dart';
 import '../../domaine/cas_utilisation/modifier_transaction.dart';
 import '../../domaine/cas_utilisation/supprimer_transaction.dart';
+import '../../domaine/cas_utilisation/verifier_solde.dart';
+import '../../domaine/cas_utilisation/scanner_recu.dart';
 import '../../domaine/entites/transaction.dart';
+import '../../domaine/entites/resultat_scan.dart';
 
 class FournisseurTransaction extends ChangeNotifier {
   final AjouterTransaction casAjouter;
   final ObtenirTransactions casObtenir;
   final ModifierTransaction casModifier;
   final SupprimerTransaction casSupprimer;
+  final VerifierSolde casVerifierSolde;
+  final ScannerRecu casScannerRecu;
 
   FournisseurTransaction({
     required this.casAjouter,
     required this.casObtenir,
     required this.casModifier,
     required this.casSupprimer,
+    required this.casVerifierSolde,
+    required this.casScannerRecu,
   });
 
   List<TransactionEntity> _transactions = [];
@@ -27,11 +35,80 @@ class FournisseurTransaction extends ChangeNotifier {
   List<TransactionEntity> get transactionsVisibles => 
       _transactions.where((t) => !_transactionsMasquees.contains(t.id)).toList();
 
+  // Instance SharedPreferences pour la persistance
+  SharedPreferences? _preferences;
+
+  // Clé pour stocker les IDs masqués
+  static const String _clesTransactionsMasquees = 'transactions_masques';
+
   bool _enChargement = false;
   bool get enChargement => _enChargement;
 
   String? _messageErreur;
   String? get messageErreur => _messageErreur;
+
+  // Propriétés pour le scan de reçus
+  ResultatScan? _dernierScan;
+  ResultatScan? get dernierScan => _dernierScan;
+
+  bool _enCoursAnalyse = false;
+  bool get enCoursAnalyse => _enCoursAnalyse;
+
+  String? _messageErreurScan;
+  String? get messageErreurScan => _messageErreurScan;
+
+  /// Initialise SharedPreferences et charge les transactions masquées
+  Future<void> initialiser() async {
+    _preferences = await SharedPreferences.getInstance();
+    await _chargerTransactionsMasquees();
+  }
+
+  /// Charge les IDs masqués depuis SharedPreferences
+  Future<void> _chargerTransactionsMasquees() async {
+    if (_preferences == null) return;
+    final listeIds = _preferences!.getStringList(_clesTransactionsMasquees) ?? [];
+    _transactionsMasquees.clear();
+    _transactionsMasquees.addAll(listeIds);
+    notifyListeners();
+  }
+
+  /// Sauvegarde les IDs masqués dans SharedPreferences
+  Future<void> _sauvegarderTransactionsMasquees() async {
+    if (_preferences == null) return;
+    await _preferences!.setStringList(
+      _clesTransactionsMasquees,
+      _transactionsMasquees.toList(),
+    );
+  }
+
+  /// Vérifie si le solde est suffisant avant une dépense
+  /// Retourne null si la vérification réussit (solde suffisant ou erreur)
+  /// Retourne un message d'erreur si le solde est insuffisant
+  Future<String?> verifierSoldeAvantDepense(double montant) async {
+    final resultat = await casVerifierSolde(ParametresVerificationSolde(montant: montant));
+    
+    return resultat.fold(
+      (echec) => echec.message, // Erreur du cas d'utilisation
+      (soldeSuffisant) {
+        if (!soldeSuffisant) {
+          // Calculer le solde actuel pour le message
+          double solde = 0.0;
+          for (var t in _transactions) {
+            if (t.type == 'income') {
+              solde += t.amount;
+            } else {
+              solde -= t.amount;
+            }
+          }
+          return 'Solde insuffisant! Votre solde actuel est de ${solde.toStringAsFixed(0)} FCA';
+        }
+        return null; // Solde suffisant
+      },
+    );
+  }
+
+  /// Vérifie si l'utilisateur a déjà des revenus
+  bool get aDesRevenus => _transactions.any((t) => t.type == 'income');
 
   Future<void> chargerTransactions() async {
     _definirChargement(true);
@@ -114,20 +191,82 @@ class FournisseurTransaction extends ChangeNotifier {
   }
 
   // Masquer une transaction (sans la supprimer de la base de données)
-  void masquerTransaction(String id) {
+  // Sauvegarde automatiquement dans SharedPreferences
+  Future<void> masquerTransaction(String id) async {
     _transactionsMasquees.add(id);
+    await _sauvegarderTransactionsMasquees();
     notifyListeners();
   }
 
   // Réafficher une transaction masquée
-  void afficherTransaction(String id) {
+  // Sauvegarde automatiquement dans SharedPreferences
+  Future<void> afficherTransaction(String id) async {
     _transactionsMasquees.remove(id);
+    await _sauvegarderTransactionsMasquees();
     notifyListeners();
   }
 
   // Réinitialiser les transactions masquées
-  void reinitialiserMasquer() {
+  // Vide également le stockage local
+  Future<void> reinitialiserMasquer() async {
     _transactionsMasquees.clear();
+    await _sauvegarderTransactionsMasquees();
+    notifyListeners();
+  }
+
+  // ── Méthodes pour le scan de reçus ──
+
+  /// Analyse un reçu depuis la caméra
+  Future<void> analyserRecuDepuisCamera() async {
+    _enCoursAnalyse = true;
+    _messageErreurScan = null;
+    notifyListeners();
+
+    final resultat = await casScannerRecu.executerDepuisCamera();
+
+    resultat.fold(
+      (echec) {
+        _messageErreurScan = echec.message;
+        _dernierScan = null;
+      },
+      (scan) {
+        _dernierScan = scan;
+        _messageErreurScan = null;
+      },
+    );
+
+    _enCoursAnalyse = false;
+    notifyListeners();
+  }
+
+  /// Analyse un reçu depuis la galerie
+  Future<void> analyserRecuDepuisGalerie() async {
+    _enCoursAnalyse = true;
+    _messageErreurScan = null;
+    notifyListeners();
+
+    final resultat = await casScannerRecu.executerDepuisGalerie();
+
+    resultat.fold(
+      (echec) {
+        _messageErreurScan = echec.message;
+        _dernierScan = null;
+      },
+      (scan) {
+        _dernierScan = scan;
+        _messageErreurScan = null;
+      },
+    );
+
+    _enCoursAnalyse = false;
+    notifyListeners();
+  }
+
+  /// Réinitialise les données du scan
+  void reinitialiserScan() {
+    _dernierScan = null;
+    _messageErreurScan = null;
+    _enCoursAnalyse = false;
     notifyListeners();
   }
 

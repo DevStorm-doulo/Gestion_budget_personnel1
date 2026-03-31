@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../fournisseurs/fournisseur_transaction.dart';
 import '../../../../core/utilitaires/constantes.dart';
+import '../../../devises/presentation/fournisseurs/fournisseur_devise.dart';
+import '../../../../core/utilitaires/formateur_montant.dart';
 
 class PageListeTransactions extends StatefulWidget {
   const PageListeTransactions({super.key});
@@ -31,7 +33,8 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
           );
         }
 
-        if (fournisseur.messageErreur != null && fournisseur.transactions.isEmpty) {
+        if (fournisseur.messageErreur != null &&
+            fournisseur.transactions.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(Marges.grande),
@@ -63,29 +66,38 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                   horizontal: Marges.moyenne, vertical: Marges.petite),
               decoration: BoxDecoration(
                 color: CodeCouleurs.primaire.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(DesignSystem.rayonBordurePetit),
+                borderRadius:
+                    BorderRadius.circular(DesignSystem.rayonBordurePetit),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.swipe_left_rounded, 
-                      color: CodeCouleurs.primaire, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Glissez vers la gauche pour masquer',
-                    style: TextStyle(
-                      color: CodeCouleurs.primaire,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.swipe_left_rounded,
+                          color: CodeCouleurs.primaire, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Glissez vers la gauche pour masquer',
+                        style: TextStyle(
+                          color: CodeCouleurs.primaire,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
+
                 ],
               ),
             ),
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.only(
-                    bottom: Marges.moyenne, left: Marges.moyenne, right: Marges.moyenne),
+                    bottom: Marges.moyenne,
+                    left: Marges.moyenne,
+                    right: Marges.moyenne),
                 itemCount: fournisseur.transactionsVisibles.length,
                 itemBuilder: (context, index) {
                   final transaction = fournisseur.transactionsVisibles[index];
@@ -97,17 +109,20 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                     key: Key(transaction.id),
                     direction: DismissDirection.endToStart,
                     background: Container(
-                      margin: const EdgeInsets.symmetric(vertical: Marges.petite),
+                      margin:
+                          const EdgeInsets.symmetric(vertical: Marges.petite),
                       decoration: BoxDecoration(
                         color: CodeCouleurs.orange,
-                        borderRadius: BorderRadius.circular(DesignSystem.rayonBordurePetit),
+                        borderRadius: BorderRadius.circular(
+                            DesignSystem.rayonBordurePetit),
                       ),
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: Marges.grande),
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.visibility_off_rounded, color: Colors.white, size: 24),
+                          Icon(Icons.visibility_off_rounded,
+                              color: Colors.white, size: 24),
                           SizedBox(height: 4),
                           Text('Masquer',
                               style: TextStyle(
@@ -122,12 +137,12 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                         context: context,
                         builder: (ctx) => AlertDialog(
                           shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(DesignSystem.rayonBordureDefaut)),
+                              borderRadius: BorderRadius.circular(
+                                  DesignSystem.rayonBordureDefaut)),
                           title: const Text('Masquer la transaction',
                               style: TextStyle(fontWeight: FontWeight.bold)),
-                          content:
-                              const Text('Voulez-vous masquer cette transaction ?'),
+                          content: const Text(
+                              'Voulez-vous masquer cette transaction ?'),
                           actions: [
                             TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
@@ -144,23 +159,30 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                     },
                     onDismissed: (_) {
                       // Masquer la transaction (pas de suppression de la base de données)
-                      fournisseur.masquerTransaction(transaction.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Transaction masquée'),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(DesignSystem.rayonBordurePetit)),
-                        ),
-                      );
+                      fournisseur.masquerTransaction(transaction.id).then((_) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Transaction masquée'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    DesignSystem.rayonBordurePetit)),
+                            action: SnackBarAction(
+                              label: 'Annuler',
+                              onPressed: () {
+                                fournisseur.afficherTransaction(transaction.id);
+                              },
+                            ),
+                          ),
+                        );
+                      });
                     },
                     child: Container(
                       margin: const EdgeInsets.only(bottom: Marges.petite),
                       decoration: BoxDecoration(
                         color: CodeCouleurs.surface,
-                        borderRadius:
-                            BorderRadius.circular(DesignSystem.rayonBordurePetit),
+                        borderRadius: BorderRadius.circular(
+                            DesignSystem.rayonBordurePetit),
                         boxShadow: DesignSystem.ombreDouce,
                       ),
                       child: ListTile(
@@ -190,14 +212,17 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                               Text(
                                 transaction.description!,
                                 style: const TextStyle(
-                                    fontSize: 12, color: CodeCouleurs.texteSecondaire),
+                                    fontSize: 12,
+                                    color: CodeCouleurs.texteSecondaire),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             Text(
-                              DateFormat('dd MMM yyyy', 'fr').format(transaction.date),
+                              DateFormat('dd MMM yyyy', 'fr')
+                                  .format(transaction.date),
                               style: const TextStyle(
-                                  fontSize: 12, color: CodeCouleurs.texteSecondaire),
+                                  fontSize: 12,
+                                  color: CodeCouleurs.texteSecondaire),
                             ),
                           ],
                         ),
@@ -205,13 +230,19 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              '${estRevenu ? '+' : '-'} ${formatFCFA(transaction.amount)} F',
-                              style: TextStyle(
-                                color: estRevenu ? CodeCouleurs.vert : CodeCouleurs.rouge,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
-                              ),
+                            Consumer<FournisseurDevise>(
+                              builder: (context, fournisseurDevise, child) {
+                                return Text(
+                                  '${estRevenu ? '+' : '-'} ${FormateurMontant.formater(transaction.amount, fournisseurDevise.deviseActive)}',
+                                  style: TextStyle(
+                                    color: estRevenu
+                                        ? CodeCouleurs.vert
+                                        : CodeCouleurs.rouge,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                  ),
+                                );
+                              },
                             ),
                             Container(
                               margin: const EdgeInsets.only(top: 4),
@@ -277,7 +308,10 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
             Text(
               'Appuyez sur + pour ajouter\nvotre première transaction.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: CodeCouleurs.texteSecondaire, height: 1.5),
+              style: TextStyle(
+                  fontSize: 14,
+                  color: CodeCouleurs.texteSecondaire,
+                  height: 1.5),
             ),
           ],
         ),
@@ -289,4 +323,6 @@ class _PageListeTransactionsState extends State<PageListeTransactions> {
     if (texte.isEmpty) return texte;
     return texte[0].toUpperCase() + texte.substring(1);
   }
+
+
 }

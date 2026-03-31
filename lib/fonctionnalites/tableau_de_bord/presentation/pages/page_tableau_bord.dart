@@ -7,7 +7,16 @@ import '../../../authentification/presentation/fournisseurs/fournisseur_authenti
 import '../../../transactions/presentation/pages/page_liste_transactions.dart';
 import '../../../transactions/presentation/pages/page_ajout_transaction.dart';
 import '../../../transactions/presentation/fournisseurs/fournisseur_transaction.dart';
-import '../../../../core/utilitaires/constantes.dart';
+import '../../../../core/theme/couleurs_application.dart';
+import '../../../../core/theme/theme_application.dart';
+import '../../../../core/widgets/carte_degradee.dart';
+import '../../../../core/widgets/effet_shimmer.dart';
+import '../../../export/service_export_pdf.dart';
+import '../../../parametres/presentation/pages/page_parametres.dart';
+import '../../../devises/presentation/fournisseurs/fournisseur_devise.dart';
+import '../../../../core/utilitaires/formateur_montant.dart';
+import '../../../analyse_ia/presentation/fournisseurs/fournisseur_analyse_ia.dart';
+import '../../../analyse_ia/presentation/widgets/carte_conseils_ia.dart';
 
 class PageTableauBord extends StatefulWidget {
   const PageTableauBord({super.key});
@@ -24,13 +33,21 @@ class _PageTableauBordState extends State<PageTableauBord> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<FournisseurTableauBord>(context, listen: false).chargerDonnees();
+      Provider.of<FournisseurTableauBord>(context, listen: false)
+          .chargerDonnees();
+      final auth =
+          Provider.of<FournisseurAuthentification>(context, listen: false);
+      if (auth.utilisateur != null) {
+        Provider.of<FournisseurAnalyseIA>(context, listen: false)
+            .analyser(auth.utilisateur!.id);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<FournisseurAuthentification>(context, listen: false);
+    final auth =
+        Provider.of<FournisseurAuthentification>(context, listen: false);
 
     final pages = [
       _construireVueTableauBord(),
@@ -38,38 +55,73 @@ class _PageTableauBordState extends State<PageTableauBord> {
     ];
 
     return Scaffold(
-      backgroundColor: CodeCouleurs.fond,
+      backgroundColor: CouleursApplication.fond,
       appBar: AppBar(
         title: Text(
           _indexMenu == 0 ? 'Mon Budget' : 'Transactions',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 22,
-            color: CodeCouleurs.textePrincipal,
+            color: CouleursApplication.textePrincipal,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          // Bouton paramètres
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              color: CodeCouleurs.fond,
+              color: CouleursApplication.fond,
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
-              icon: const Icon(Icons.logout_rounded, color: CodeCouleurs.texteSecondaire),
+              icon: const Icon(Icons.settings_rounded,
+                  color: CouleursApplication.primaire),
+              tooltip: 'Paramètres',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PageParametres()),
+              ),
+            ),
+          ),
+          // Bouton export PDF
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: CouleursApplication.fond,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.picture_as_pdf_rounded,
+                  color: CouleursApplication.primaire),
+              tooltip: 'Exporter PDF',
+              onPressed: () => _exporterPdf(),
+            ),
+          ),
+          // Bouton déconnexion
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: CouleursApplication.fond,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.logout_rounded,
+                  color: CouleursApplication.texteSecondaire),
               tooltip: 'Déconnexion',
               onPressed: () async {
                 final confirmation = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
+                      borderRadius:
+                          BorderRadius.circular(ThemeApplication.rayonGrand),
                     ),
                     title: const Text('Déconnexion',
                         style: TextStyle(fontWeight: FontWeight.bold)),
-                    content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+                    content:
+                        const Text('Voulez-vous vraiment vous déconnecter ?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -77,7 +129,7 @@ class _PageTableauBordState extends State<PageTableauBord> {
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: CodeCouleurs.primaire,
+                          backgroundColor: CouleursApplication.primaire,
                         ),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text('Déconnexion'),
@@ -94,17 +146,17 @@ class _PageTableauBordState extends State<PageTableauBord> {
         ],
       ),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
+        duration: ThemeApplication.animationMoyenne,
         child: pages[_indexMenu],
       ),
       floatingActionButton: Container(
         margin: const EdgeInsets.only(top: 20),
         decoration: BoxDecoration(
-          gradient: CodeCouleurs.degradeSecondaire,
-          borderRadius: BorderRadius.circular(16),
+          gradient: CouleursApplication.degradeSecondaire,
+          borderRadius: BorderRadius.circular(ThemeApplication.rayonMoyen),
           boxShadow: [
             BoxShadow(
-              color: CodeCouleurs.secondaire.withValues(alpha: 0.4),
+              color: CouleursApplication.secondaire.withValues(alpha: 0.4),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -115,10 +167,13 @@ class _PageTableauBordState extends State<PageTableauBord> {
           elevation: 0,
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text('Ajouter',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           onPressed: () {
-            final tableauBord = Provider.of<FournisseurTableauBord>(context, listen: false);
-            final transactionsFournisseur = Provider.of<FournisseurTransaction>(context, listen: false);
+            final tableauBord =
+                Provider.of<FournisseurTableauBord>(context, listen: false);
+            final transactionsFournisseur =
+                Provider.of<FournisseurTransaction>(context, listen: false);
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PageAjoutTransaction()),
@@ -134,30 +189,32 @@ class _PageTableauBordState extends State<PageTableauBord> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: CodeCouleurs.surface,
-          boxShadow: DesignSystem.ombreMoyenne,
+          color: CouleursApplication.surface,
+          boxShadow: ThemeApplication.ombreMoyenne,
           borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(DesignSystem.rayonBordureDefaut)),
+              top: Radius.circular(ThemeApplication.rayonGrand)),
         ),
         child: ClipRRect(
           borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(DesignSystem.rayonBordureDefaut)),
+              top: Radius.circular(ThemeApplication.rayonGrand)),
           child: BottomNavigationBar(
             currentIndex: _indexMenu,
             onTap: (index) => setState(() => _indexMenu = index),
             backgroundColor: Colors.transparent,
-            selectedItemColor: CodeCouleurs.primaire,
-            unselectedItemColor: CodeCouleurs.texteSecondaire,
+            selectedItemColor: CouleursApplication.primaire,
+            unselectedItemColor: CouleursApplication.texteSecondaire,
             elevation: 0,
             showSelectedLabels: true,
             showUnselectedLabels: true,
             type: BottomNavigationBarType.fixed,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            selectedLabelStyle:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
             items: const [
               BottomNavigationBarItem(
                   icon: Icon(Icons.dashboard_rounded), label: 'Accueil'),
               BottomNavigationBarItem(
-                  icon: Icon(Icons.receipt_long_rounded), label: 'Transactions'),
+                  icon: Icon(Icons.receipt_long_rounded),
+                  label: 'Transactions'),
             ],
           ),
         ),
@@ -169,8 +226,35 @@ class _PageTableauBordState extends State<PageTableauBord> {
     return Consumer<FournisseurTableauBord>(
       builder: (context, fournisseur, child) {
         if (fournisseur.enChargement) {
-          return const Center(
-              child: CircularProgressIndicator(color: CodeCouleurs.primaire));
+          return const ShimmerDashboard();
+        }
+
+        // Afficher le message d'erreur s'il y a lieu
+        if (fournisseur.messageErreur != null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(ThemeApplication.espaceGrand),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      size: 64, color: CouleursApplication.erreur),
+                  const SizedBox(height: ThemeApplication.espaceMoyenne),
+                  Text(
+                    fournisseur.messageErreur!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: CouleursApplication.erreur, fontSize: 16),
+                  ),
+                  const SizedBox(height: ThemeApplication.espaceMoyenne),
+                  ElevatedButton(
+                    onPressed: () => fournisseur.chargerDonnees(),
+                    child: const Text('Réessayer'),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         final stats = fournisseur.statistiques;
@@ -183,16 +267,17 @@ class _PageTableauBordState extends State<PageTableauBord> {
                   width: 90,
                   height: 90,
                   decoration: BoxDecoration(
-                    color: CodeCouleurs.primaire.withValues(alpha: 0.08),
+                    color: CouleursApplication.primaire.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.bar_chart_rounded,
-                      size: 44, color: CodeCouleurs.primaire),
+                      size: 44, color: CouleursApplication.primaire),
                 ),
-                const SizedBox(height: Marges.moyenne),
+                const SizedBox(height: ThemeApplication.espaceMoyenne),
                 const Text('Aucune donnée pour ce mois',
                     style: TextStyle(
-                        color: CodeCouleurs.texteSecondaire, fontSize: 16)),
+                        color: CouleursApplication.texteSecondaire,
+                        fontSize: 16)),
               ],
             ),
           );
@@ -200,42 +285,62 @@ class _PageTableauBordState extends State<PageTableauBord> {
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
-              Marges.moyenne, Marges.petite, Marges.moyenne, Marges.moyenne),
+              ThemeApplication.espaceMoyenne,
+              ThemeApplication.espacePetite,
+              ThemeApplication.espaceMoyenne,
+              ThemeApplication.espaceMoyenne),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Carte Solde ──
-              _carteSolde(fournisseur),
-              const SizedBox(height: Marges.moyenne),
+              // ── Carte Solde Premium ──
+              _carteSoldePremium(fournisseur),
+              const SizedBox(height: ThemeApplication.espaceMoyenne),
 
               // ── Revenus / Dépenses ──
               Row(
                 children: [
-                  Expanded(child: _carteStatistique(
+                  Expanded(
+                      child: _carteStatistiquePremium(
                     label: 'Revenus',
                     montant: stats.totalRevenus,
                     icone: Icons.south_rounded,
-                    couleur: CodeCouleurs.vert,
+                    couleur: CouleursApplication.succes,
                     prefixe: '+',
+                    degrade: CouleursApplication.degradeSucces,
                   )),
-                  const SizedBox(width: Marges.moyenne),
-                  Expanded(child: _carteStatistique(
+                  const SizedBox(width: ThemeApplication.espaceMoyenne),
+                  Expanded(
+                      child: _carteStatistiquePremium(
                     label: 'Dépenses',
                     montant: stats.totalDepenses,
                     icone: Icons.north_rounded,
-                    couleur: CodeCouleurs.rouge,
+                    couleur: CouleursApplication.erreur,
                     prefixe: '-',
+                    degrade: CouleursApplication.degradeErreur,
                   )),
                 ],
               ),
 
+              // ── Graphique évolution mensuelle ──
+              const SizedBox(height: ThemeApplication.espaceGrand),
+              _enteteSection('Évolution mensuelle'),
+              const SizedBox(height: ThemeApplication.espaceMoyenne),
+              _carteGraphiqueEvolution(stats),
+
               // ── Graphique répartition ──
               if (stats.depensesParCategorie.isNotEmpty) ...[
-                const SizedBox(height: Marges.enorme),
+                const SizedBox(height: ThemeApplication.espaceGrand),
                 _enteteSection('Répartition des dépenses'),
-                const SizedBox(height: Marges.moyenne),
+                const SizedBox(height: ThemeApplication.espaceMoyenne),
                 _carteGraphique(stats.depensesParCategorie),
               ],
+
+              // ── Conseils IA ──
+              const SizedBox(height: ThemeApplication.espaceGrand),
+              _enteteSection('Assistant financier'),
+              const SizedBox(height: ThemeApplication.espaceMoyenne),
+              const CarteConseilsIA(),
+
               const SizedBox(height: 100),
             ],
           ),
@@ -244,19 +349,16 @@ class _PageTableauBordState extends State<PageTableauBord> {
     );
   }
 
-  // ── Carte du solde ──────────────────────────
-  Widget _carteSolde(FournisseurTableauBord fournisseur) {
+  // ── Carte du solde premium ──────────────────────────
+  Widget _carteSoldePremium(FournisseurTableauBord fournisseur) {
     final mois = DateFormat('MMMM yyyy', 'fr').format(DateTime.now());
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: DesignSystem.degradePrimaire,
-        borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
-        boxShadow: DesignSystem.ombreColoree,
+    return CarteDegradee.principale(
+      remplissage: const EdgeInsets.symmetric(
+        vertical: ThemeApplication.espaceTresGrand,
+        horizontal: ThemeApplication.espaceGrand,
       ),
-      padding: const EdgeInsets.symmetric(
-          vertical: Marges.enorme, horizontal: Marges.grande),
-      child: Column(
+      enfant: Column(
         children: [
           // Label + toggle visibilité
           Row(
@@ -272,7 +374,7 @@ class _PageTableauBordState extends State<PageTableauBord> {
               GestureDetector(
                 onTap: () => setState(() => _soldeVisible = !_soldeVisible),
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
+                  duration: ThemeApplication.animationRapide,
                   child: Icon(
                     _soldeVisible
                         ? Icons.visibility_off_rounded
@@ -288,7 +390,7 @@ class _PageTableauBordState extends State<PageTableauBord> {
           const SizedBox(height: 8),
           // Montant animé
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
+            duration: ThemeApplication.animationMoyenne,
             transitionBuilder: (child, anim) => FadeTransition(
               opacity: anim,
               child: SlideTransition(
@@ -299,14 +401,11 @@ class _PageTableauBordState extends State<PageTableauBord> {
               ),
             ),
             child: _soldeVisible
-                ? Text(
+                ? MontantStylise(
                     key: const ValueKey('visible'),
-                    '${formatFCFA(fournisseur.soldeActuel)} FCFA',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5),
+                    montant: fournisseur.soldeActuel,
+                    couleur: Colors.white,
+                    taillePolice: 36,
                   )
                 : const Text(
                     key: ValueKey('masque'),
@@ -321,8 +420,7 @@ class _PageTableauBordState extends State<PageTableauBord> {
           const SizedBox(height: 6),
           // Mois en cours
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(20),
@@ -341,21 +439,28 @@ class _PageTableauBordState extends State<PageTableauBord> {
     );
   }
 
-  // ── Carte statistique (revenus / dépenses) ──
-  Widget _carteStatistique({
+  // ── Carte statistique premium (revenus / dépenses) ──
+  Widget _carteStatistiquePremium({
     required String label,
     required double montant,
     required IconData icone,
     required Color couleur,
     required String prefixe,
+    required LinearGradient degrade,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: CodeCouleurs.surface,
-        borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
-        boxShadow: DesignSystem.ombreDouce,
+        color: CouleursApplication.surface,
+        borderRadius: BorderRadius.circular(ThemeApplication.rayonGrand),
+        boxShadow: [
+          BoxShadow(
+            color: couleur.withValues(alpha: 0.15),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.all(Marges.moyenne),
+      padding: const EdgeInsets.all(ThemeApplication.espaceMoyenne),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -369,15 +474,16 @@ class _PageTableauBordState extends State<PageTableauBord> {
                 ),
                 child: Icon(icone, color: couleur, size: 16),
               ),
-              const SizedBox(width: Marges.petite),
+              const SizedBox(width: ThemeApplication.espacePetite),
               Text(label,
                   style: const TextStyle(
-                      color: CodeCouleurs.texteSecondaire, fontSize: 12)),
+                      color: CouleursApplication.texteSecondaire,
+                      fontSize: 12)),
             ],
           ),
-          const SizedBox(height: Marges.petite),
+          const SizedBox(height: ThemeApplication.espacePetite),
           Text(
-            '$prefixe ${formatFCFA(montant)} F',
+            '$prefixe ${_formaterMontant(montant)} F',
             style: TextStyle(
                 color: couleur, fontWeight: FontWeight.bold, fontSize: 18),
           ),
@@ -393,19 +499,147 @@ class _PageTableauBordState extends State<PageTableauBord> {
       style: const TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.bold,
-          color: CodeCouleurs.textePrincipal),
+          color: CouleursApplication.textePrincipal),
     );
   }
 
-  // ── Carte graphique ─────────────────────────
+  // ── Carte graphique évolution ─────────────────────────
+  Widget _carteGraphiqueEvolution(dynamic stats) {
+    // Données simulées pour l'évolution mensuelle
+    final List<FlSpot> spots = [
+      const FlSpot(0, 3),
+      const FlSpot(1, 2),
+      const FlSpot(2, 4),
+      const FlSpot(3, 3.5),
+      const FlSpot(4, 5),
+      const FlSpot(5, 4.5),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(ThemeApplication.espaceMoyenne),
+      decoration: BoxDecoration(
+        color: CouleursApplication.surface,
+        borderRadius: BorderRadius.circular(ThemeApplication.rayonGrand),
+        boxShadow: ThemeApplication.ombreDouce,
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 200,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 1,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color:
+                          CouleursApplication.texteClair.withValues(alpha: 0.2),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        const mois = [
+                          'Jan',
+                          'Fév',
+                          'Mar',
+                          'Avr',
+                          'Mai',
+                          'Juin'
+                        ];
+                        if (value.toInt() >= 0 && value.toInt() < mois.length) {
+                          return SideTitleWidget(
+                            axisSide: meta.axisSide,
+                            child: Text(
+                              mois[value.toInt()],
+                              style: const TextStyle(
+                                color: CouleursApplication.texteSecondaire,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        }
+                        return const Text('');
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}k',
+                          style: const TextStyle(
+                            color: CouleursApplication.texteSecondaire,
+                            fontSize: 10,
+                          ),
+                        );
+                      },
+                      reservedSize: 32,
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(
+                  show: false,
+                ),
+                minX: 0,
+                maxX: 5,
+                minY: 0,
+                maxY: 6,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    gradient: CouleursApplication.degradePrimaire,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          CouleursApplication.primaire.withValues(alpha: 0.3),
+                          CouleursApplication.primaire.withValues(alpha: 0.0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Carte graphique camembert ─────────────────────────
   Widget _carteGraphique(Map<String, double> depenses) {
     final entrees = depenses.entries.toList();
     return Container(
-      padding: const EdgeInsets.all(Marges.moyenne),
+      padding: const EdgeInsets.all(ThemeApplication.espaceMoyenne),
       decoration: BoxDecoration(
-        color: CodeCouleurs.surface,
-        borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
-        boxShadow: DesignSystem.ombreDouce,
+        color: CouleursApplication.surface,
+        borderRadius: BorderRadius.circular(ThemeApplication.rayonGrand),
+        boxShadow: ThemeApplication.ombreDouce,
       ),
       child: Column(
         children: [
@@ -414,7 +648,8 @@ class _PageTableauBordState extends State<PageTableauBord> {
             child: PieChart(
               PieChartData(
                 sections: entrees.map((e) {
-                  final couleur = couleurCategorie(e.key);
+                  final couleur =
+                      CouleursApplication.couleurParCategorie(e.key);
                   return PieChartSectionData(
                     color: couleur,
                     value: e.value,
@@ -424,31 +659,32 @@ class _PageTableauBordState extends State<PageTableauBord> {
                 }).toList(),
                 sectionsSpace: 3,
                 centerSpaceRadius: 50,
-                centerSpaceColor: CodeCouleurs.surface,
+                centerSpaceColor: CouleursApplication.surface,
               ),
             ),
           ),
-          const SizedBox(height: Marges.moyenne),
+          const SizedBox(height: ThemeApplication.espaceMoyenne),
           // Légende
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: entrees.map((e) {
-              final couleur = couleurCategorie(e.key);
+              final couleur = CouleursApplication.couleurParCategorie(e.key);
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     width: 10,
                     height: 10,
-                    decoration: BoxDecoration(
-                        color: couleur, shape: BoxShape.circle),
+                    decoration:
+                        BoxDecoration(color: couleur, shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '${e.key[0].toUpperCase()}${e.key.substring(1)} · ${formatFCFA(e.value)} F',
+                    '${e.key[0].toUpperCase()}${e.key.substring(1)} · ${_formaterMontant(e.value)} F',
                     style: const TextStyle(
-                        fontSize: 12, color: CodeCouleurs.texteSecondaire),
+                        fontSize: 12,
+                        color: CouleursApplication.texteSecondaire),
                   ),
                 ],
               );
@@ -456,6 +692,77 @@ class _PageTableauBordState extends State<PageTableauBord> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _exporterPdf() async {
+    final fournisseur =
+        Provider.of<FournisseurTableauBord>(context, listen: false);
+    final stats = fournisseur.statistiques;
+
+    if (stats == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucune donnée à exporter'),
+          backgroundColor: CouleursApplication.erreur,
+        ),
+      );
+      return;
+    }
+
+    // Afficher un indicateur de chargement
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          color: CouleursApplication.primaire,
+        ),
+      ),
+    );
+
+    try {
+      final servicePdf = ServiceExportPdf();
+      final transactionsFournisseur =
+          Provider.of<FournisseurTransaction>(context, listen: false);
+      final transactions = transactionsFournisseur.transactions;
+
+      final pdfBytes = await servicePdf.genererRapportMensuel(
+        mois: DateTime.now().month,
+        annee: DateTime.now().year,
+        solde: fournisseur.soldeActuel,
+        totalRevenus: stats.totalRevenus,
+        totalDepenses: stats.totalDepenses,
+        depensesParCategorie: stats.depensesParCategorie,
+        transactions: transactions,
+      );
+
+      // Fermer le dialogue de chargement
+      Navigator.pop(context);
+
+      // Partager le PDF
+      final nomFichier =
+          'rapport_budget_${DateFormat('yyyy_MM').format(DateTime.now())}';
+      await servicePdf.partagerPdf(pdfBytes, nomFichier);
+    } catch (e) {
+      // Fermer le dialogue de chargement
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'export: $e'),
+          backgroundColor: CouleursApplication.erreur,
+        ),
+      );
+    }
+  }
+
+  String _formaterMontant(double montant) {
+    final fournisseurDevise =
+        Provider.of<FournisseurDevise>(context, listen: false);
+    return FormateurMontant.formater(
+      montant,
+      fournisseurDevise.deviseActive,
     );
   }
 }

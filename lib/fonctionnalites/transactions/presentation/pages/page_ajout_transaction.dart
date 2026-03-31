@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../../authentification/presentation/fournisseurs/fournisseur_authentification.dart';
 import '../../domaine/entites/transaction.dart';
 import '../fournisseurs/fournisseur_transaction.dart';
-import '../../../tableau_de_bord/presentation/fournisseurs/fournisseur_tableau_bord.dart';
+import '../widgets/bouton_scanner_recu.dart';
 import '../../../../core/utilitaires/constantes.dart';
 import 'package:intl/intl.dart';
 
@@ -56,15 +56,18 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
         elevation: 0,
       ),
       backgroundColor: CodeCouleurs.fond,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(Marges.moyenne),
-        child: Column(
-          children: [
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(Marges.moyenne),
+            child: Column(
+              children: [
             // Sélecteur Type
             Container(
               decoration: BoxDecoration(
                 color: CodeCouleurs.surface,
-                borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
+                borderRadius:
+                    BorderRadius.circular(DesignSystem.rayonBordureDefaut),
                 boxShadow: DesignSystem.ombreDouce,
               ),
               padding: const EdgeInsets.all(6),
@@ -89,11 +92,50 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
             ),
             const SizedBox(height: Marges.moyenne),
 
+            // Bouton scanner reçu
+            BoutonScannerRecu(
+              onResultatRecu: (resultat) {
+                // Pré-remplir les champs avec les données du scan
+                if (resultat.montant != null) {
+                  _controleurMontant.text = resultat.montant!.toStringAsFixed(0);
+                }
+                if (resultat.description != null && resultat.description!.isNotEmpty) {
+                  _controleurDescription.text = resultat.description!;
+                }
+                if (resultat.date != null) {
+                  setState(() => _dateSelectionnee = resultat.date!);
+                }
+                // Afficher un message de succès
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      resultat.estComplet
+                          ? 'Reçu analysé avec succès ✓'
+                          : 'Données partiellement détectées',
+                    ),
+                    backgroundColor: resultat.estComplet
+                        ? CodeCouleurs.vert
+                        : CodeCouleurs.orange,
+                  ),
+                );
+              },
+              onErreur: (message) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(message),
+                    backgroundColor: CodeCouleurs.rouge,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: Marges.moyenne),
+
             // Formulaire
             Container(
               decoration: BoxDecoration(
                 color: CodeCouleurs.surface,
-                borderRadius: BorderRadius.circular(DesignSystem.rayonBordureDefaut),
+                borderRadius:
+                    BorderRadius.circular(DesignSystem.rayonBordureDefaut),
                 boxShadow: DesignSystem.ombreDouce,
               ),
               padding: const EdgeInsets.all(Marges.grande),
@@ -211,7 +253,8 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: Marges.moyenne, vertical: Marges.moyenne),
+                            horizontal: Marges.moyenne,
+                            vertical: Marges.moyenne),
                         decoration: BoxDecoration(
                           color: CodeCouleurs.fond,
                           borderRadius: BorderRadius.circular(
@@ -284,12 +327,21 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
                             : () async {
                                 if (_cleFormulaire.currentState!.validate()) {
                                   final nav = Navigator.of(context);
-                                  final messenger = ScaffoldMessenger.of(context);
-                                  final user = FirebaseAuth.instance.currentUser;
+                                  final messenger =
+                                      ScaffoldMessenger.of(context);
+
+                                  // Récupérer l'utilisateur depuis le fournisseur d'authentification
+                                  final auth =
+                                      Provider.of<FournisseurAuthentification>(
+                                          context,
+                                          listen: false);
+                                  final user = auth.utilisateur;
+
                                   if (user == null) {
                                     messenger.showSnackBar(
                                       const SnackBar(
-                                          content: Text('Erreur: Utilisateur non connecté')),
+                                          content: Text(
+                                              'Erreur: Utilisateur non connecté')),
                                     );
                                     return;
                                   }
@@ -303,45 +355,39 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
                                     if (montant <= 0) {
                                       messenger.showSnackBar(
                                         const SnackBar(
-                                            content: Text('Le montant doit être positif')),
+                                            content: Text(
+                                                'Le montant doit être positif')),
                                       );
                                       return;
                                     }
 
                                     // Vérification: nouveau utilisateur doit d'abord ajouter un revenu
                                     if (_typeSelectionne == 'expense') {
-                                      // Charger les données du tableau de bord pour vérifier
-                                      final tableauBord = Provider.of<FournisseurTableauBord>(
-                                          context,
-                                          listen: false);
-                                      
-                                      await tableauBord.chargerDonnees();
-                                      
-                                      // Vérifier si l'utilisateur a déjà des revenus
-                                      final transactions = fournisseur.transactions;
-                                      final aDesRevenus = transactions.any((t) => t.type == 'income');
-                                      
-                                      if (!aDesRevenus) {
+                                      // Vérifier si l'utilisateur a déjà des revenus via le fournisseur
+                                      if (!fournisseur.aDesRevenus) {
                                         messenger.showSnackBar(
                                           const SnackBar(
-                                              content: Text('Vous devez d\'abord ajouter un revenu avant d\'ajouter une dépense')),
+                                              content: Text(
+                                                  'Vous devez d\'abord ajouter un revenu avant d\'ajouter une dépense')),
                                         );
                                         return;
                                       }
 
-                                      // Vérification: les dépenses ne doivent pas dépasser le revenu
-                                      if (tableauBord.soldeActuel < montant) {
+                                      // Vérification du solde via le cas d'utilisation
+                                      final erreurSolde = await fournisseur
+                                          .verifierSoldeAvantDepense(montant);
+                                      if (erreurSolde != null) {
                                         messenger.showSnackBar(
-                                          SnackBar(
-                                              content: Text('Solde insuffisant! Votre solde actuel est de ${formatFCFA(tableauBord.soldeActuel)} FCA')),
+                                          SnackBar(content: Text(erreurSolde)),
                                         );
                                         return;
                                       }
                                     }
 
-                                    final nouvelleTransaction = TransactionEntity(
+                                    final nouvelleTransaction =
+                                        TransactionEntity(
                                       id: '',
-                                      userId: user.uid,
+                                      userId: user.id,
                                       type: _typeSelectionne,
                                       amount: montant,
                                       date: _dateSelectionnee,
@@ -353,21 +399,26 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
                                       createdAt: DateTime.now(),
                                     );
 
-                                    final succes = await fournisseur
-                                        .ajouterTransaction(nouvelleTransaction);
+                                    final succes =
+                                        await fournisseur.ajouterTransaction(
+                                            nouvelleTransaction);
                                     if (!mounted) return;
                                     if (succes) {
                                       nav.pop();
-                                    } else if (fournisseur.messageErreur != null) {
+                                    } else if (fournisseur.messageErreur !=
+                                        null) {
                                       messenger.showSnackBar(
                                         SnackBar(
-                                            content: Text(fournisseur.messageErreur!)),
+                                            content: Text(
+                                                fournisseur.messageErreur!)),
                                       );
                                     }
                                   } catch (e) {
                                     if (!mounted) return;
                                     messenger.showSnackBar(
-                                      SnackBar(content: Text('Erreur inattendue: $e')),
+                                      SnackBar(
+                                          content:
+                                              Text('Erreur inattendue: $e')),
                                     );
                                   }
                                 }
@@ -392,6 +443,11 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
           ],
         ),
       ),
+          // Overlay d'analyse en cours
+          if (fournisseur.enCoursAnalyse)
+            const OverlayAnalyse(),
+        ],
+      ),
     );
   }
 
@@ -410,8 +466,7 @@ class _PageAjoutTransactionState extends State<PageAjoutTransaction> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: actif ? couleur : Colors.transparent,
-            borderRadius:
-                BorderRadius.circular(DesignSystem.rayonBordurePetit),
+            borderRadius: BorderRadius.circular(DesignSystem.rayonBordurePetit),
             boxShadow: actif ? DesignSystem.ombreDouce : null,
           ),
           child: Row(

@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 android/app/google-services.json
+
+# API Keys - ne jamais exposer les clés API
+lib/core/config/config_api.dart
